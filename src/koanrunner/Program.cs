@@ -2,10 +2,11 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Serilog;
+using Serilog.Events;
 
 namespace koanrunner
 {
@@ -13,33 +14,31 @@ namespace koanrunner
     {
         static string exerciseDirectory = @"..\..\exercises";
         static string testDirectory = @"..\..\tests";
-        static FileChangeEventHandler fileChangeEventHandler = null;
-
-        static Stack<FileSystemEventArgs> eventQueue = new Stack<FileSystemEventArgs>();
+        public static BlockingCollection<FileInfo> changedFileEvents = new BlockingCollection<FileInfo>(new ConcurrentStack<FileInfo>(), 500);
 
         static async Task Main(string[] args)
         {
-            // wire up file system watcher 
+            Log.Logger = new LoggerConfiguration()
+                .MinimumLevel.Information()
+                .Enrich.FromLogContext()
+                .WriteTo.Console()
+                .CreateLogger();
 
             if (!Directory.Exists(exerciseDirectory))
             {
-                Console.WriteLine(Directory.GetCurrentDirectory());
-                // Display the proper way to call the program.
-                Console.WriteLine("Exercise Directory '{x}' was not found. Consider restoring this project with 'git checkout .'", exerciseDirectory);
+                Log.Error("Exercise Directory '{x}' was not found. Consider restoring this project with 'git checkout .'", exerciseDirectory);
                 return;
             }
 
             // Create a new FileSystemWatcher and set its properties.
             using (FileSystemWatcher watcher = new FileSystemWatcher())
             {
+                Log.Information("Building File System Watcher for {0}", exerciseDirectory);
+
                 watcher.Path = exerciseDirectory;
 
                 // Watch for changes in LastWrite times
                 watcher.NotifyFilter = NotifyFilters.LastWrite;
-
-                // Watch does not yet support multiple extensions so we'll have to 
-                // filter for .cs and .csproj files in the event handlers 
-                // watcher.Filter = "*.cs";
 
                 // include watching all sub-directories under the exercises folder. 
                 watcher.IncludeSubdirectories = true; 
@@ -51,22 +50,22 @@ namespace koanrunner
                 watcher.Renamed += OnRenamed;
 
                 // Begin watching.
+                Log.Information("Starting File System Watcher for {0}", exerciseDirectory);
                 watcher.EnableRaisingEvents = true;
+                Log.Information("Started File System Watcher for {0}", exerciseDirectory);
 
-                //Task.Run(() => FileChangeEventHandler.ProcessFileEvents(exerciseDirectory, testDirectory));
-                fileChangeEventHandler = new FileChangeEventHandler(exerciseDirectory, testDirectory);
+                var fileChangeEventHandler = new FileChangeEventHandler(changedFileEvents, exerciseDirectory, testDirectory);
+                
+                // Create the Host for the application, wire up to the console lifetime
+                // and start the process.
                 await new HostBuilder()
-                .ConfigureServices((hostContext, services) =>
-                {
-                services.AddHostedService<FileChangeEventHandler>(provider => fileChangeEventHandler);
-                })
-                .UseConsoleLifetime()
-                .RunConsoleAsync();
-
-            
-                // Wait for the user to quit the program.
-                //Console.WriteLine("Press 'q' to quit the Koan Runner.");
-                //while (Console.Read() != 'q') ;
+                    .ConfigureServices((hostContext, services) =>
+                    {
+                    services.AddHostedService<FileChangeEventHandler>(provider => fileChangeEventHandler);
+                    })
+                    .UseSerilog()
+                    .UseConsoleLifetime()
+                    .RunConsoleAsync();
             }
         }
         
@@ -74,7 +73,7 @@ namespace koanrunner
         private static void OnChanged(object source, FileSystemEventArgs e)
         {
             // Handle file changed events.
-            fileChangeEventHandler.AddEvent(e);
+            changedFileEvents.Add(new FileInfo(e.FullPath));
         }
 
         private static void OnDeleted(object source, FileSystemEventArgs e)
@@ -84,7 +83,7 @@ namespace koanrunner
             // it's one of the koans. If so, suggest the user use git
             // to restore the file. 
 
-            Console.WriteLine($"OnDeleted File: {e.FullPath} {e.ChangeType}");
+            Log.Warning($"OnDeleted File: {e.FullPath} {e.ChangeType}");
         }
 
         private static void OnCreated(object source, FileSystemEventArgs e)
@@ -92,7 +91,7 @@ namespace koanrunner
             // Alert user to the creation of a file for inclusion in a 
             // specific project. Lots of potential edge cases here.
             // what should we do??? 
-            Console.WriteLine($"OnCreated File: {e.FullPath} {e.ChangeType}");
+            Log.Information($"OnCreated File: {e.FullPath} {e.ChangeType}");
         }
 
         private static void OnRenamed(object source, RenamedEventArgs e)
@@ -102,7 +101,7 @@ namespace koanrunner
             // it's one of the koans they accidentally renamed. If so, 
             // suggest the user use git to restore the file. 
 
-            Console.WriteLine($"File: {e.OldFullPath} renamed to {e.FullPath}");  
+            Log.Warning($"File: {e.OldFullPath} renamed to {e.FullPath}");  
         }
     } 
 }

@@ -12,18 +12,17 @@ namespace koanrunner {
     public class FileChangeEventHandler : BackgroundService
     {
 
-        public static BlockingCollection<FileInfo> events = new BlockingCollection<FileInfo>(new ConcurrentStack<FileInfo>(), 500);
+
         public static List<string> processedEvents = new List<string>();
 
+        public BlockingCollection<FileInfo> ChangedExerciseFiles { get; }
         public string ExerciseDirectory { get; }
         public string TestDirectory { get; }
 
-        public FileChangeEventHandler(string exerciseDirectory, string testDirectory){
+        public FileChangeEventHandler(BlockingCollection<FileInfo> changedExerciseFiles, string exerciseDirectory, string testDirectory){
+            this.ChangedExerciseFiles = changedExerciseFiles;
             this.ExerciseDirectory = exerciseDirectory;
             this.TestDirectory = testDirectory;
-        }
-        public void AddEvent (FileSystemEventArgs e){
-            events.Add(new FileInfo(e.FullPath));
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -34,8 +33,8 @@ namespace koanrunner {
         private async Task BackgroundProcessing(CancellationToken stoppingToken)
         {
             
-            while(!events.IsCompleted && !stoppingToken.IsCancellationRequested){
-                FileInfo changedFileInfo = events.Take(stoppingToken);
+            while(!ChangedExerciseFiles.IsCompleted && !stoppingToken.IsCancellationRequested){
+                FileInfo changedFileInfo = ChangedExerciseFiles.Take(stoppingToken);
                 // exit if we've already processed this file recently
                 if(processedEvents.Contains(changedFileInfo.Name)) {
                     processedEvents.Remove(changedFileInfo.Name);
