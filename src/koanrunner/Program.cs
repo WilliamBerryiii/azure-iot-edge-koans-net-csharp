@@ -60,6 +60,7 @@ namespace koanrunner
                 {
                 services.AddHostedService<FileChangeEventHandler>(provider => fileChangeEventHandler);
                 })
+                .UseConsoleLifetime()
                 .RunConsoleAsync();
 
             

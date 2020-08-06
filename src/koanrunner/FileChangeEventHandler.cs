@@ -31,11 +31,11 @@ namespace koanrunner {
             await BackgroundProcessing(stoppingToken);
         }
 
-        private async Task BackgroundProcessing(CancellationToken token)
+        private async Task BackgroundProcessing(CancellationToken stoppingToken)
         {
             
-            while(!events.IsCompleted){
-                FileInfo changedFileInfo = events.Take();
+            while(!events.IsCompleted && !stoppingToken.IsCancellationRequested){
+                FileInfo changedFileInfo = events.Take(stoppingToken);
                 // exit if we've already processed this file recently
                 if(processedEvents.Contains(changedFileInfo.Name)) {
                     processedEvents.Remove(changedFileInfo.Name);
