@@ -24,6 +24,8 @@ namespace koanrunner {
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            await Task.Yield();
+            
             while(!ChangedExerciseFiles.IsCompleted && !stoppingToken.IsCancellationRequested){
                 FileInfo changedFileInfo = ChangedExerciseFiles.Take(stoppingToken);
                 // exit if we've already processed this file recently
