@@ -6,33 +6,24 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace koanrunner {
 
     public class FileChangeEventHandler : BackgroundService
     {
-
-
+        private ILogger<FileChangeEventHandler> _logger;
+        private RunnerConfig _config;
         public static List<string> processedEvents = new List<string>();
-
         public BlockingCollection<FileInfo> ChangedExerciseFiles { get; }
-        public string ExerciseDirectory { get; }
-        public string TestDirectory { get; }
 
-        public FileChangeEventHandler(BlockingCollection<FileInfo> changedExerciseFiles, string exerciseDirectory, string testDirectory){
+        public FileChangeEventHandler(BlockingCollection<FileInfo> changedExerciseFiles, RunnerConfig config, ILogger<FileChangeEventHandler> logger){
             this.ChangedExerciseFiles = changedExerciseFiles;
-            this.ExerciseDirectory = exerciseDirectory;
-            this.TestDirectory = testDirectory;
+            _config = config;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await BackgroundProcessing(stoppingToken);
-        }
-
-        private async Task BackgroundProcessing(CancellationToken stoppingToken)
-        {
-            
             while(!ChangedExerciseFiles.IsCompleted && !stoppingToken.IsCancellationRequested){
                 FileInfo changedFileInfo = ChangedExerciseFiles.Take(stoppingToken);
                 // exit if we've already processed this file recently
@@ -57,7 +48,7 @@ namespace koanrunner {
 
                 // Find the test projects for the exercise project that was updated
                 var testProjects = 
-                    new DirectoryInfo(this.TestDirectory);
+                    new DirectoryInfo(_config.TestDirectory);
                 var foo = testProjects
                     .GetFiles("*.csproj", SearchOption.AllDirectories);
 
