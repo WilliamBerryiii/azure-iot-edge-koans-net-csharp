@@ -24,8 +24,11 @@ namespace koanrunner {
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            // see https://github.com/dotnet/runtime/issues/36063 as to why the 
+            // following line is used to prevent a block on the blockingcollection
+            // take call. 
             await Task.Yield();
-            
+
             while(!ChangedExerciseFiles.IsCompleted && !stoppingToken.IsCancellationRequested){
                 FileInfo changedFileInfo = ChangedExerciseFiles.Take(stoppingToken);
                 // exit if we've already processed this file recently
